@@ -1,0 +1,52 @@
+name: Chocolatey Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.123)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ inputs.version }}"
+          $tag = "v$version"
+          gh release download $tag --pattern "sfdc_${version}_windows_*.zip" --pattern "checksums.txt" --dir artifacts
+
+      - name: Extract checksums
+        run: |
+          $version = "${{ inputs.version }}"
+          $checksums = Get-Content artifacts/checksums.txt
+          $amd64 = ($checksums | Select-String "sfdc_${version}_windows_amd64.zip").ToString().Split(" ")[0]
+          $arm64 = ($checksums | Select-String "sfdc_${version}_windows_arm64.zip").ToString().Split(" ")[0]
+          echo "CHECKSUM_AMD64=$amd64" >> $env:GITHUB_ENV
+          echo "CHECKSUM_ARM64=$arm64" >> $env:GITHUB_ENV
+
+      - name: Update nuspec version
+        run: |
+          $version = "${{ inputs.version }}"
+          $nuspec = Get-Content packaging/chocolatey/salesforce-cli.nuspec
+          $nuspec = $nuspec -replace '<version>.*</version>', "<version>$version</version>"
+          $nuspec | Set-Content packaging/chocolatey/salesforce-cli.nuspec
+
+      - name: Update install script checksums
+        run: |
+          $script = Get-Content packaging/chocolatey/tools/chocolateyInstall.ps1
+          $script = $script -replace "CHECKSUM_AMD64_PLACEHOLDER", $env:CHECKSUM_AMD64
+          $script = $script -replace "CHECKSUM_ARM64_PLACEHOLDER", $env:CHECKSUM_ARM64
+          $script | Set-Content packaging/chocolatey/tools/chocolateyInstall.ps1
+
+      - name: Pack and push
+        run: |
+          cd packaging/chocolatey
+          choco pack
+          choco push salesforce-cli.${{ inputs.version }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
