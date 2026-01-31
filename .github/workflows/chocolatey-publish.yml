@@ -1,10 +1,10 @@
-name: Chocolatey Publish
+name: Publish to Chocolatey
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.1.123)'
+        description: 'Version to publish (e.g., 0.1.0)'
         required: true
         type: string
 
@@ -14,39 +14,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download release assets
+      - name: Validate release exists
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh release view "v${{ inputs.version }}" --repo ${{ github.repository }} --json tagName 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Release v${{ inputs.version }} not found"
+            exit 1
+          }
+          Write-Host "Found release v${{ inputs.version }}"
+
+      - name: Get checksums from release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v${{ inputs.version }}" --repo ${{ github.repository }} --pattern "checksums.txt" --dir .
+
+          $checksums = Get-Content checksums.txt
+          $x64Hash = ($checksums | Select-String "windows_amd64.zip").Line.Split()[0]
+          $arm64Hash = ($checksums | Select-String "windows_arm64.zip").Line.Split()[0]
+
+          Write-Host "x64 SHA256: $x64Hash"
+          Write-Host "arm64 SHA256: $arm64Hash"
+
+          echo "X64_HASH=$x64Hash" >> $env:GITHUB_ENV
+          echo "ARM64_HASH=$arm64Hash" >> $env:GITHUB_ENV
+
+      - name: Update version and checksums
+        shell: pwsh
         run: |
           $version = "${{ inputs.version }}"
-          $tag = "v$version"
-          gh release download $tag --pattern "sfdc_${version}_windows_*.zip" --pattern "checksums.txt" --dir artifacts
 
-      - name: Extract checksums
-        run: |
-          $version = "${{ inputs.version }}"
-          $checksums = Get-Content artifacts/checksums.txt
-          $amd64 = ($checksums | Select-String "sfdc_${version}_windows_amd64.zip").ToString().Split(" ")[0]
-          $arm64 = ($checksums | Select-String "sfdc_${version}_windows_arm64.zip").ToString().Split(" ")[0]
-          echo "CHECKSUM_AMD64=$amd64" >> $env:GITHUB_ENV
-          echo "CHECKSUM_ARM64=$arm64" >> $env:GITHUB_ENV
+          # Update version in nuspec
+          $nuspec = 'packaging/chocolatey/salesforce-cli.nuspec'
+          (Get-Content $nuspec) -replace '<version>0.0.0</version>', "<version>$version</version>" | Set-Content $nuspec
+          Write-Host "Updated nuspec to version $version"
 
-      - name: Update nuspec version
-        run: |
-          $version = "${{ inputs.version }}"
-          $nuspec = Get-Content packaging/chocolatey/salesforce-cli.nuspec
-          $nuspec = $nuspec -replace '<version>.*</version>', "<version>$version</version>"
-          $nuspec | Set-Content packaging/chocolatey/salesforce-cli.nuspec
+          # Inject checksums into install script
+          $script = 'packaging/chocolatey/tools/chocolateyInstall.ps1'
+          $content = Get-Content $script -Raw
+          $content = $content -replace 'CHECKSUM_AMD64_PLACEHOLDER', $env:X64_HASH
+          $content = $content -replace 'CHECKSUM_ARM64_PLACEHOLDER', $env:ARM64_HASH
+          Set-Content $script $content
+          Write-Host "Injected checksums into install script"
 
-      - name: Update install script checksums
-        run: |
-          $script = Get-Content packaging/chocolatey/tools/chocolateyInstall.ps1
-          $script = $script -replace "CHECKSUM_AMD64_PLACEHOLDER", $env:CHECKSUM_AMD64
-          $script = $script -replace "CHECKSUM_ARM64_PLACEHOLDER", $env:CHECKSUM_ARM64
-          $script | Set-Content packaging/chocolatey/tools/chocolateyInstall.ps1
-
-      - name: Pack and push
+      - name: Pack Chocolatey package
+        shell: pwsh
         run: |
           cd packaging/chocolatey
           choco pack
-          choco push salesforce-cli.${{ inputs.version }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
+          Get-ChildItem *.nupkg
+
+      - name: Push to Chocolatey
+        shell: pwsh
+        run: |
+          cd packaging/chocolatey
+          choco push (Get-ChildItem *.nupkg).Name --source https://push.chocolatey.org/ --key ${{ secrets.CHOCOLATEY_API_KEY }}

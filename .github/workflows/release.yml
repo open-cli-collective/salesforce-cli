@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v0.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,18 +17,13 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
+    env:
+      TAG: ${{ github.ref_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TAG }}
           fetch-depth: 0
-
-      - name: Get version from tag
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-go@v5
         with:
@@ -41,71 +42,158 @@ jobs:
   chocolatey:
     needs: goreleaser
     runs-on: windows-latest
+    continue-on-error: true
+    env:
+      TAG: ${{ github.ref_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download release assets
+      - name: Get checksums from release
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "${{ needs.goreleaser.outputs.version }}"
-          $tag = "v$version"
-          gh release download $tag --pattern "sfdc_${version}_windows_*.zip" --pattern "checksums.txt" --dir artifacts
+          gh release download "${{ env.TAG }}" --repo ${{ github.repository }} --pattern "checksums.txt" --dir .
 
-      - name: Extract checksums
+          $checksums = Get-Content checksums.txt
+          $x64Hash = ($checksums | Select-String "windows_amd64.zip").Line.Split()[0]
+          $arm64Hash = ($checksums | Select-String "windows_arm64.zip").Line.Split()[0]
+
+          Write-Host "x64 SHA256: $x64Hash"
+          Write-Host "arm64 SHA256: $arm64Hash"
+
+          echo "X64_HASH=$x64Hash" >> $env:GITHUB_ENV
+          echo "ARM64_HASH=$arm64Hash" >> $env:GITHUB_ENV
+
+      - name: Update version and checksums
+        shell: pwsh
         run: |
-          $version = "${{ needs.goreleaser.outputs.version }}"
-          $checksums = Get-Content artifacts/checksums.txt
-          $amd64 = ($checksums | Select-String "sfdc_${version}_windows_amd64.zip").ToString().Split(" ")[0]
-          $arm64 = ($checksums | Select-String "sfdc_${version}_windows_arm64.zip").ToString().Split(" ")[0]
-          echo "CHECKSUM_AMD64=$amd64" >> $env:GITHUB_ENV
-          echo "CHECKSUM_ARM64=$arm64" >> $env:GITHUB_ENV
+          $version = "${{ env.TAG }}".TrimStart('v')
 
-      - name: Update nuspec version
-        run: |
-          $version = "${{ needs.goreleaser.outputs.version }}"
-          $nuspec = Get-Content packaging/chocolatey/salesforce-cli.nuspec
-          $nuspec = $nuspec -replace '<version>.*</version>', "<version>$version</version>"
-          $nuspec | Set-Content packaging/chocolatey/salesforce-cli.nuspec
+          # Update version in nuspec
+          $nuspec = 'packaging/chocolatey/salesforce-cli.nuspec'
+          (Get-Content $nuspec) -replace '<version>0.0.0</version>', "<version>$version</version>" | Set-Content $nuspec
+          Write-Host "Updated nuspec to version $version"
 
-      - name: Update install script checksums
-        run: |
-          $script = Get-Content packaging/chocolatey/tools/chocolateyInstall.ps1
-          $script = $script -replace "CHECKSUM_AMD64_PLACEHOLDER", $env:CHECKSUM_AMD64
-          $script = $script -replace "CHECKSUM_ARM64_PLACEHOLDER", $env:CHECKSUM_ARM64
-          $script | Set-Content packaging/chocolatey/tools/chocolateyInstall.ps1
+          # Inject checksums into install script
+          $script = 'packaging/chocolatey/tools/chocolateyInstall.ps1'
+          $content = Get-Content $script -Raw
+          $content = $content -replace 'CHECKSUM_AMD64_PLACEHOLDER', $env:X64_HASH
+          $content = $content -replace 'CHECKSUM_ARM64_PLACEHOLDER', $env:ARM64_HASH
+          Set-Content $script $content
+          Write-Host "Injected checksums into install script"
 
-      - name: Pack and push
+      - name: Pack Chocolatey package
+        shell: pwsh
         run: |
           cd packaging/chocolatey
           choco pack
-          choco push salesforce-cli.${{ needs.goreleaser.outputs.version }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
+          Get-ChildItem *.nupkg
+
+      - name: Push to Chocolatey
+        shell: pwsh
+        run: |
+          cd packaging/chocolatey
+          choco push (Get-ChildItem *.nupkg).Name --source https://push.chocolatey.org/ --key ${{ secrets.CHOCOLATEY_API_KEY }}
 
   winget:
     needs: goreleaser
     runs-on: windows-latest
+    continue-on-error: true
+    env:
+      TAG: ${{ github.ref_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download checksums
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $version = "${{ needs.goreleaser.outputs.version }}"
-          $tag = "v$version"
-          gh release download $tag --pattern "checksums.txt" --dir artifacts
-
       - name: Install wingetcreate
+        shell: pwsh
         run: |
-          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
-      - name: Update and submit manifest
+      - name: Check if manifest exists in winget-pkgs
+        id: check-manifest
+        shell: pwsh
         run: |
-          $version = "${{ needs.goreleaser.outputs.version }}"
-          $baseUrl = "https://github.com/open-cli-collective/salesforce-cli/releases/download/v$version"
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/OpenCLICollective/salesforce-cli" -Method Head -SkipHttpErrorCheck
+          if ($response.StatusCode -eq 200) {
+            Write-Host "Manifest exists - will use wingetcreate update"
+            echo "exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Manifest does not exist - will use wingetcreate submit"
+            echo "exists=false" >> $env:GITHUB_OUTPUT
+          }
 
-          ./wingetcreate.exe update OpenCLICollective.salesforce-cli `
-            --version $version `
-            --urls "$baseUrl/sfdc_${version}_windows_amd64.zip|x64" "$baseUrl/sfdc_${version}_windows_arm64.zip|arm64" `
-            --submit `
-            --token ${{ secrets.WINGET_GITHUB_TOKEN }}
+      - name: Get checksums from release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ env.TAG }}" --repo ${{ github.repository }} --pattern "checksums.txt" --dir .
+
+          $checksums = Get-Content checksums.txt
+          $x64Hash = ($checksums | Select-String "windows_amd64.zip").Line.Split()[0]
+          $arm64Hash = ($checksums | Select-String "windows_arm64.zip").Line.Split()[0]
+
+          Write-Host "x64 SHA256: $x64Hash"
+          Write-Host "arm64 SHA256: $arm64Hash"
+
+          echo "X64_HASH=$x64Hash" >> $env:GITHUB_ENV
+          echo "ARM64_HASH=$arm64Hash" >> $env:GITHUB_ENV
+
+      - name: Update manifest (existing package)
+        if: steps.check-manifest.outputs.exists == 'true'
+        shell: pwsh
+        env:
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          $version = "${{ env.TAG }}".TrimStart('v')
+          $x64 = "https://github.com/open-cli-collective/salesforce-cli/releases/download/${{ env.TAG }}/sfdc_${version}_windows_amd64.zip"
+          $arm64 = "https://github.com/open-cli-collective/salesforce-cli/releases/download/${{ env.TAG }}/sfdc_${version}_windows_arm64.zip"
+
+          Write-Host "Updating existing manifest to version $version"
+          Write-Host "x64 URL: $x64"
+          Write-Host "arm64 URL: $arm64"
+          ./wingetcreate.exe update OpenCLICollective.salesforce-cli --version $version --urls $x64 $arm64 --submit --token $env:WINGET_GITHUB_TOKEN
+
+      - name: Create manifest (new package)
+        if: steps.check-manifest.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          $version = "${{ env.TAG }}".TrimStart('v')
+          $manifestDir = "manifests"
+          New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
+
+          # Update version manifest
+          $versionManifest = Get-Content "packaging/winget/OpenCLICollective.salesforce-cli.yaml" -Raw
+          $versionManifest = $versionManifest -replace "0\.0\.0", $version
+          Set-Content "$manifestDir/OpenCLICollective.salesforce-cli.yaml" $versionManifest
+
+          # Update locale manifest
+          $localeManifest = Get-Content "packaging/winget/OpenCLICollective.salesforce-cli.locale.en-US.yaml" -Raw
+          $localeManifest = $localeManifest -replace "0\.0\.0", $version
+          Set-Content "$manifestDir/OpenCLICollective.salesforce-cli.locale.en-US.yaml" $localeManifest
+
+          # Update installer manifest with version and real checksums
+          $installerManifest = Get-Content "packaging/winget/OpenCLICollective.salesforce-cli.installer.yaml" -Raw
+          $installerManifest = $installerManifest -replace "0\.0\.0", $version
+          # Use .NET regex for sequential replacement (PowerShell -replace doesn't support count)
+          $regex = [regex]"0{64}"
+          $installerManifest = $regex.Replace($installerManifest, $env:X64_HASH, 1)
+          $installerManifest = $regex.Replace($installerManifest, $env:ARM64_HASH, 1)
+          Set-Content "$manifestDir/OpenCLICollective.salesforce-cli.installer.yaml" $installerManifest
+
+          Write-Host "Generated manifests:"
+          Get-ChildItem $manifestDir | ForEach-Object { Write-Host "  $_" }
+
+          Write-Host "`nValidating manifests..."
+          winget validate --manifest $manifestDir
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Manifest validation failed"
+            exit 1
+          }
+          Write-Host "Validation passed!"
+
+          Write-Host "`nSubmitting new package to Winget..."
+          ./wingetcreate.exe submit --token $env:WINGET_GITHUB_TOKEN $manifestDir

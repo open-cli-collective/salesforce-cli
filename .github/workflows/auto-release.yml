@@ -3,16 +3,24 @@ name: Auto Release
 on:
   push:
     branches: [main]
+    # Gate 1: Only trigger when Go code actually changes
     paths:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
 
+permissions:
+  contents: write
+
 jobs:
   create-tag:
     runs-on: ubuntu-latest
-    # Dual-gate: Only create release for feat: or fix: commits
-    if: startsWith(github.event.head_commit.message, 'feat:') || startsWith(github.event.head_commit.message, 'fix:')
+    # Gate 2: Only release for feat: and fix: commits (actual functionality changes)
+    if: >-
+      startsWith(github.event.head_commit.message, 'feat:') ||
+      startsWith(github.event.head_commit.message, 'feat(') ||
+      startsWith(github.event.head_commit.message, 'fix:') ||
+      startsWith(github.event.head_commit.message, 'fix(')
     steps:
       - uses: actions/checkout@v4
         with:
