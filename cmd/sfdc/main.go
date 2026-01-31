@@ -5,18 +5,33 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/open-cli-collective/salesforce-cli/internal/version"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/completion"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/configcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/initcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/root"
+)
+
+// Exit codes
+const (
+	exitOK    = 0
+	exitError = 1
 )
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(exitError)
 	}
+	os.Exit(exitOK)
 }
 
 func run() error {
-	// TODO: Initialize root command and execute
-	fmt.Printf("sfdc %s\n", version.Info())
-	return nil
+	rootCmd, opts := root.NewCmd()
+
+	// Register all commands
+	initcmd.Register(rootCmd, opts)
+	configcmd.Register(rootCmd, opts)
+	completion.Register(rootCmd, opts)
+
+	return rootCmd.Execute()
 }

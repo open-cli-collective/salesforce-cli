@@ -27,6 +27,12 @@ var (
 	noBrowser   bool
 )
 
+// Register registers the init command with the parent command.
+// The opts parameter is accepted for consistency with other commands but not used.
+func Register(parent *cobra.Command, _ interface{}) {
+	parent.AddCommand(NewCommand())
+}
+
 // NewCommand returns the init command.
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{

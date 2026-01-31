@@ -14,6 +14,12 @@ import (
 	"github.com/open-cli-collective/salesforce-cli/internal/keychain"
 )
 
+// Register registers the config command with the parent command.
+// The opts parameter is accepted for consistency with other commands but not used.
+func Register(parent *cobra.Command, _ interface{}) {
+	parent.AddCommand(NewCommand())
+}
+
 // NewCommand returns the config command with subcommands.
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
