@@ -117,8 +117,10 @@ func TestSObject_GetTime(t *testing.T) {
 		},
 	}
 
-	expected := time.Date(2024, 1, 15, 10, 30, 0, 0, time.FixedZone("", 0))
-	assert.Equal(t, expected, obj.GetTime("CreatedDate"))
+	result := obj.GetTime("CreatedDate")
+	expected := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	// Compare using UTC to avoid timezone location name differences
+	assert.True(t, result.Equal(expected), "expected %v, got %v", expected, result)
 	assert.True(t, obj.GetTime("Name").IsZero())      // wrong type
 	assert.True(t, obj.GetTime("NotExists").IsZero()) // doesn't exist
 }
