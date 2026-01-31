@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>salesforce-cli</id>
+    <version>0.0.0</version>
+    <title>Salesforce CLI</title>
+    <authors>Open CLI Collective</authors>
+    <owners>rianjs</owners>
+    <licenseUrl>https://github.com/open-cli-collective/salesforce-cli/blob/main/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/open-cli-collective/salesforce-cli#readme</projectUrl>
+    <projectSourceUrl>https://github.com/open-cli-collective/salesforce-cli</projectSourceUrl>
+    <packageSourceUrl>https://github.com/open-cli-collective/salesforce-cli/tree/main/packaging/chocolatey</packageSourceUrl>
+    <bugTrackerUrl>https://github.com/open-cli-collective/salesforce-cli/issues</bugTrackerUrl>
+    <copyright>Copyright (c) 2025 Open CLI Collective</copyright>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A command-line interface for Salesforce. Query data, manage objects, and interact with the Salesforce API directly from your terminal.
+
+Features:
+- OAuth 2.0 authentication with secure token storage
+- SOQL queries with table, JSON, or plain output
+- Object CRUD operations
+- API discovery and metadata inspection
+
+Binary: sfdc.exe</description>
+    <summary>Command-line interface for Salesforce</summary>
+    <releaseNotes>https://github.com/open-cli-collective/salesforce-cli/releases</releaseNotes>
+    <tags>salesforce cli crm api soql</tags>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
