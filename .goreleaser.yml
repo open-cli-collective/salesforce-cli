@@ -1,0 +1,107 @@
+version: 2
+
+project_name: sfdc
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: sfdc
+    main: ./cmd/sfdc
+    binary: sfdc
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/open-cli-collective/salesforce-cli/internal/version.Version={{.Version}}
+      - -X github.com/open-cli-collective/salesforce-cli/internal/version.Commit={{.Commit}}
+      - -X github.com/open-cli-collective/salesforce-cli/internal/version.BuildDate={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+# Linux packages (.deb and .rpm)
+nfpms:
+  - id: sfdc
+    package_name: sfdc
+    vendor: Open CLI Collective
+    homepage: https://github.com/open-cli-collective/salesforce-cli
+    maintainer: Open CLI Collective <https://github.com/open-cli-collective>
+    description: Command-line interface for Salesforce
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/sfdc/LICENSE
+
+# Homebrew cask with auto-quarantine removal for unsigned binaries
+homebrew_casks:
+  - name: salesforce-cli
+    repository:
+      owner: open-cli-collective
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/open-cli-collective/salesforce-cli
+    description: "Command-line interface for Salesforce"
+    binary: sfdc
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sfdc"]
+    caveats: |
+      salesforce-cli has been installed.
+
+      To configure, run:
+        sfdc init
+
+      You'll need a Connected App in Salesforce with OAuth 2.0 enabled.
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - '^Merge pull request'
+  groups:
+    - title: 'Features'
+      regexp: '^feat:'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^fix:'
+      order: 1
+    - title: 'Other'
+      order: 999
+
+release:
+  github:
+    owner: open-cli-collective
+    name: salesforce-cli
