@@ -50,10 +50,8 @@ func New(cfg ClientConfig) (*Client, error) {
 		return nil, ErrHTTPClientRequired
 	}
 
-	// Normalize instance URL
 	instanceURL := normalizeURL(cfg.InstanceURL)
 
-	// Use default API version if not specified
 	apiVersion := cfg.APIVersion
 	if apiVersion == "" {
 		apiVersion = DefaultAPIVersion
@@ -71,12 +69,10 @@ func New(cfg ClientConfig) (*Client, error) {
 func normalizeURL(urlStr string) string {
 	urlStr = strings.TrimSpace(urlStr)
 
-	// Add https:// if no scheme provided
 	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
 		urlStr = "https://" + urlStr
 	}
 
-	// Remove trailing slash
 	return strings.TrimSuffix(urlStr, "/")
 }
 
@@ -105,12 +101,9 @@ func (c *Client) Delete(ctx context.Context, path string) ([]byte, error) {
 	return c.doRequest(ctx, http.MethodDelete, path, nil)
 }
 
-// doRequest performs an HTTP request
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
-	// Build full URL
 	fullURL := c.buildURL(path)
 
-	// Prepare request body
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -120,28 +113,23 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		bodyReader = bytes.NewReader(jsonBody)
 	}
 
-	// Create request
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Execute request
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	// Check for errors
 	if resp.StatusCode >= 400 {
 		return nil, ParseAPIError(resp)
 	}
 
-	// Read response body
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -151,19 +139,15 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return respBody, nil
 }
 
-// buildURL constructs the full URL for an API path
 func (c *Client) buildURL(path string) string {
-	// If path is already absolute, use it directly
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path
 	}
 
-	// If path starts with /services/, it's a full path from instance root
 	if strings.HasPrefix(path, "/services/") {
 		return c.InstanceURL + path
 	}
 
-	// Otherwise, it's relative to the API base URL
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
@@ -268,7 +252,6 @@ func (c *Client) QueryAll(ctx context.Context, soql string) (*QueryResult, error
 		return nil, err
 	}
 
-	// Fetch additional pages if needed
 	for !result.Done && result.NextRecordsURL != "" {
 		nextPage, err := c.QueryMore(ctx, result.NextRecordsURL)
 		if err != nil {

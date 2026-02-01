@@ -64,7 +64,6 @@ Prerequisites:
 func runInit(cmd *cobra.Command, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Step 1: Check existing configuration
 	fmt.Println("Checking existing configuration...")
 	cfg, _ := config.Load()
 
@@ -80,7 +79,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 				return nil
 			}
 
-			// Token exists but verification failed
 			fmt.Println()
 			fmt.Println("Your OAuth token appears to be expired or revoked.")
 			fmt.Print("Would you like to re-authenticate? [Y/n]: ")
@@ -103,7 +101,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 2: Get instance URL
 	if instanceURL == "" {
 		instanceURL = cfg.InstanceURL
 	}
@@ -124,7 +121,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Step 3: Get client ID
 	if clientID == "" {
 		clientID = cfg.ClientID
 	}
@@ -144,14 +140,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Step 4: Save configuration
 	cfg.InstanceURL = instanceURL
 	cfg.ClientID = clientID
 	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	// Step 5: Start OAuth flow
 	oauthConfig := auth.GetOAuthConfig(instanceURL, clientID)
 	authURL := auth.GetAuthURL(oauthConfig)
 
@@ -167,7 +161,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(authURL)
 	fmt.Println()
 
-	// Start callback server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -177,21 +170,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println("You'll need to manually copy the authorization code.")
 	}
 
-	// Open browser (unless --no-browser)
 	if !noBrowser {
 		if err := openBrowser(authURL); err != nil {
 			fmt.Printf("Could not open browser: %v\n", err)
 		}
 	}
 
-	// Wait for callback or manual input
 	var code string
 	if resultChan != nil {
 		fmt.Println("Waiting for authorization...")
 		fmt.Println("(Or paste the authorization code or full redirect URL below)")
 		fmt.Println()
 
-		// Read from callback or stdin
 		inputChan := make(chan string, 1)
 		go func() {
 			fmt.Print("> ")
@@ -222,7 +212,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no authorization code received")
 	}
 
-	// Step 6: Exchange code for token
 	fmt.Println()
 	fmt.Println("Exchanging authorization code for tokens...")
 
@@ -231,13 +220,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
 
-	// Step 7: Save token
 	if err := keychain.SetToken(token); err != nil {
 		return fmt.Errorf("failed to save token: %w", err)
 	}
 	fmt.Printf("Token saved to: %s\n", keychain.GetStorageBackend())
 
-	// Step 8: Verify connectivity
 	if !noVerify {
 		fmt.Println()
 		if err := verifyConnectivity(instanceURL); err != nil {
@@ -255,7 +242,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 func extractAuthCode(input string) string {
 	input = strings.TrimSpace(input)
 
-	// If it looks like a URL, try to extract the code parameter
 	if strings.HasPrefix(input, "http://localhost") || strings.HasPrefix(input, "https://localhost") {
 		if u, err := url.Parse(input); err == nil {
 			return u.Query().Get("code")
@@ -263,7 +249,6 @@ func extractAuthCode(input string) string {
 		return ""
 	}
 
-	// Otherwise treat as raw code
 	return input
 }
 
@@ -279,7 +264,6 @@ func verifyConnectivity(instanceURL string) error {
 	}
 	fmt.Println("  OAuth token: OK")
 
-	// Test API access by fetching API versions
 	normalizedURL := "https://" + strings.TrimPrefix(strings.TrimPrefix(instanceURL, "https://"), "http://")
 	resp, err := client.Get(normalizedURL + "/services/data/")
 	if err != nil {

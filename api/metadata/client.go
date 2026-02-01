@@ -109,16 +109,13 @@ func (c *Client) Post(ctx context.Context, path string, body interface{}) ([]byt
 }
 
 // DescribeMetadata returns available metadata types.
-// Uses the Tooling API to get metadata type information.
 func (c *Client) DescribeMetadata(ctx context.Context) (*DescribeMetadataResult, error) {
-	// Use Tooling API's describe endpoint for metadata types
 	path := "/tooling/describe"
 	body, err := c.Get(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the describe result to extract metadata types
 	var describeResult struct {
 		Sobjects []struct {
 			Name       string `json:"name"`
@@ -134,8 +131,6 @@ func (c *Client) DescribeMetadata(ctx context.Context) (*DescribeMetadataResult,
 		return nil, fmt.Errorf("failed to parse describe result: %w", err)
 	}
 
-	// Filter and convert to MetadataType
-	// Common metadata types that can be queried via Tooling API
 	metadataTypeNames := map[string]bool{
 		"ApexClass":                true,
 		"ApexTrigger":              true,
@@ -169,7 +164,6 @@ func (c *Client) DescribeMetadata(ctx context.Context) (*DescribeMetadataResult,
 
 // ListMetadata lists components of a specific metadata type.
 func (c *Client) ListMetadata(ctx context.Context, metadataType string) ([]MetadataComponent, error) {
-	// Query the Tooling API for the metadata type
 	var soql string
 	switch metadataType {
 	case "ApexClass":
@@ -216,7 +210,6 @@ func (c *Client) ListMetadata(ctx context.Context, metadataType string) ([]Metad
 			comp.ID = id
 		}
 
-		// Handle different name fields
 		if name, ok := rec["Name"].(string); ok {
 			comp.FullName = name
 		} else if name, ok := rec["DeveloperName"].(string); ok {
@@ -235,7 +228,6 @@ func (c *Client) ListMetadata(ctx context.Context, metadataType string) ([]Metad
 
 // Deploy deploys metadata to the org.
 func (c *Client) Deploy(ctx context.Context, zipData []byte, options DeployOptions) (*DeployResult, error) {
-	// Encode zip as base64
 	zipBase64 := base64.StdEncoding.EncodeToString(zipData)
 
 	request := DeployRequest{
@@ -286,27 +278,22 @@ func CreateZipFromDirectory(sourceDir string) ([]byte, error) {
 			return err
 		}
 
-		// Get relative path
 		relPath, err := filepath.Rel(sourceDir, path)
 		if err != nil {
 			return err
 		}
 
-		// Skip the root directory itself
 		if relPath == "." {
 			return nil
 		}
 
-		// Use forward slashes for zip paths
 		zipPath := filepath.ToSlash(relPath)
 
 		if info.IsDir() {
-			// Add directory entry
 			_, err := zipWriter.Create(zipPath + "/")
 			return err
 		}
 
-		// Add file
 		writer, err := zipWriter.Create(zipPath)
 		if err != nil {
 			return err
@@ -341,10 +328,9 @@ func ExtractZipToDirectory(zipData []byte, destDir string) error {
 	}
 
 	for _, file := range reader.File {
-		// Construct destination path
 		destPath := filepath.Join(destDir, file.Name)
 
-		// Check for zip slip vulnerability
+		// Prevent zip slip vulnerability
 		if !strings.HasPrefix(destPath, filepath.Clean(destDir)+string(os.PathSeparator)) {
 			return fmt.Errorf("illegal file path: %s", file.Name)
 		}
@@ -356,12 +342,10 @@ func ExtractZipToDirectory(zipData []byte, destDir string) error {
 			continue
 		}
 
-		// Create parent directories
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err
 		}
 
-		// Extract file
 		if err := extractFile(file, destPath); err != nil {
 			return err
 		}
@@ -388,11 +372,9 @@ func extractFile(file *zip.File, destPath string) error {
 	return err
 }
 
-// Retrieve retrieves metadata from the org.
-// Note: The REST Metadata API retrieve endpoint is not fully supported in all orgs.
-// For complex retrieves, consider using the Tooling API to get individual components.
+// Retrieve retrieves metadata from the org using the Tooling API.
+// For complex retrieves with package.xml, use the official Salesforce CLI.
 func (c *Client) Retrieve(ctx context.Context, metadataType, componentName string) ([]byte, error) {
-	// For simple cases, we can retrieve component body via Tooling API
 	var soql string
 	switch metadataType {
 	case "ApexClass":
@@ -425,7 +407,6 @@ func (c *Client) Retrieve(ctx context.Context, metadataType, componentName strin
 		return nil, fmt.Errorf("%s not found: %s", metadataType, componentName)
 	}
 
-	// Get the body/markup field
 	rec := queryResult.Records[0]
 	var content string
 	if body, ok := rec["Body"].(string); ok {
@@ -441,7 +422,6 @@ func (c *Client) Retrieve(ctx context.Context, metadataType, componentName strin
 
 // RetrieveAll retrieves all components of a type from the org.
 func (c *Client) RetrieveAll(ctx context.Context, metadataType string) (map[string][]byte, error) {
-	// First list all components
 	components, err := c.ListMetadata(ctx, metadataType)
 	if err != nil {
 		return nil, err
@@ -449,14 +429,12 @@ func (c *Client) RetrieveAll(ctx context.Context, metadataType string) (map[stri
 
 	results := make(map[string][]byte)
 	for _, comp := range components {
-		// Skip managed package components
 		if comp.NamespacePrefix != "" {
 			continue
 		}
 
 		content, err := c.Retrieve(ctx, metadataType, comp.FullName)
 		if err != nil {
-			// Log error but continue with other components
 			continue
 		}
 		results[comp.FullName] = content
