@@ -4,6 +4,7 @@ package root
 import (
 	"context"
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -40,24 +41,34 @@ func (o *Options) View() *view.View {
 	return v
 }
 
+// loadClientConfig loads common configuration needed for API clients.
+func (o *Options) loadClientConfig() (instanceURL string, httpClient *http.Client, err error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return "", nil, err
+	}
+
+	httpClient, err = auth.GetHTTPClient(context.Background())
+	if err != nil {
+		return "", nil, err
+	}
+
+	return cfg.InstanceURL, httpClient, nil
+}
+
 // APIClient creates a new API client from config
 func (o *Options) APIClient() (*api.Client, error) {
 	if o.testClient != nil {
 		return o.testClient, nil
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	httpClient, err := auth.GetHTTPClient(context.Background())
+	instanceURL, httpClient, err := o.loadClientConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	return api.New(api.ClientConfig{
-		InstanceURL: cfg.InstanceURL,
+		InstanceURL: instanceURL,
 		HTTPClient:  httpClient,
 		APIVersion:  o.APIVersion,
 	})
@@ -74,18 +85,13 @@ func (o *Options) BulkClient() (*bulk.Client, error) {
 		return o.testBulkClient, nil
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	httpClient, err := auth.GetHTTPClient(context.Background())
+	instanceURL, httpClient, err := o.loadClientConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	return bulk.New(bulk.ClientConfig{
-		InstanceURL: cfg.InstanceURL,
+		InstanceURL: instanceURL,
 		HTTPClient:  httpClient,
 		APIVersion:  o.APIVersion,
 	})

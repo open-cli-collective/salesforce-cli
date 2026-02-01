@@ -45,75 +45,44 @@ func runList(ctx context.Context, opts *root.Options, customOnly bool) error {
 
 	v := opts.View()
 
-	// Filter if needed
+	// Filter custom objects if requested
 	objects := resp.SObjects
 	if customOnly {
-		filtered := make([]struct {
-			Name        string
-			Label       string
-			LabelPlural string
-			KeyPrefix   string
-			Custom      bool
-			Queryable   bool
-		}, 0)
+		filtered := objects[:0]
 		for _, obj := range objects {
 			if obj.Custom {
-				filtered = append(filtered, struct {
-					Name        string
-					Label       string
-					LabelPlural string
-					KeyPrefix   string
-					Custom      bool
-					Queryable   bool
-				}{
-					Name:        obj.Name,
-					Label:       obj.Label,
-					LabelPlural: obj.LabelPlural,
-					KeyPrefix:   obj.KeyPrefix,
-					Custom:      obj.Custom,
-					Queryable:   obj.Queryable,
-				})
+				filtered = append(filtered, obj)
 			}
 		}
+		objects = filtered
 
-		if opts.Output == "json" {
-			return v.JSON(filtered)
-		}
-
-		headers := []string{"Name", "Label", "Key Prefix", "Queryable"}
-		rows := make([][]string, 0, len(filtered))
-		for _, obj := range filtered {
-			queryable := "No"
-			if obj.Queryable {
-				queryable = "Yes"
-			}
-			rows = append(rows, []string{obj.Name, obj.Label, obj.KeyPrefix, queryable})
-		}
-
-		if len(rows) == 0 {
+		if len(objects) == 0 {
 			v.Info("No custom objects found")
 			return nil
 		}
-
-		return v.Table(headers, rows)
 	}
 
 	if opts.Output == "json" {
 		return v.JSON(objects)
 	}
 
-	headers := []string{"Name", "Label", "Key Prefix", "Custom", "Queryable"}
+	// Build table rows
+	var headers []string
+	if customOnly {
+		headers = []string{"Name", "Label", "Key Prefix", "Queryable"}
+	} else {
+		headers = []string{"Name", "Label", "Key Prefix", "Custom", "Queryable"}
+	}
+
 	rows := make([][]string, 0, len(objects))
 	for _, obj := range objects {
-		custom := "No"
-		if obj.Custom {
-			custom = "Yes"
+		queryable := boolToYesNo(obj.Queryable)
+		if customOnly {
+			rows = append(rows, []string{obj.Name, obj.Label, obj.KeyPrefix, queryable})
+		} else {
+			custom := boolToYesNo(obj.Custom)
+			rows = append(rows, []string{obj.Name, obj.Label, obj.KeyPrefix, custom, queryable})
 		}
-		queryable := "No"
-		if obj.Queryable {
-			queryable = "Yes"
-		}
-		rows = append(rows, []string{obj.Name, obj.Label, obj.KeyPrefix, custom, queryable})
 	}
 
 	if err := v.Table(headers, rows); err != nil {
@@ -122,4 +91,12 @@ func runList(ctx context.Context, opts *root.Options, customOnly bool) error {
 
 	v.Info("\n%d object(s)", len(objects))
 	return nil
+}
+
+// boolToYesNo converts a boolean to "Yes" or "No" for display.
+func boolToYesNo(b bool) string {
+	if b {
+		return "Yes"
+	}
+	return "No"
 }

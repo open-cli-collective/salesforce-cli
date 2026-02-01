@@ -72,15 +72,7 @@ func runFields(ctx context.Context, opts *root.Options, objectName string, requi
 	rows := make([][]string, 0, len(fields))
 
 	for _, f := range fields {
-		required := "No"
-		if !f.Nillable && f.Createable {
-			required = "Yes"
-		}
-		custom := "No"
-		if f.Custom {
-			custom = "Yes"
-		}
-
+		isRequired := !f.Nillable && f.Createable
 		length := ""
 		if f.Length > 0 {
 			length = fmt.Sprintf("%d", f.Length)
@@ -91,8 +83,8 @@ func runFields(ctx context.Context, opts *root.Options, objectName string, requi
 			f.Label,
 			f.Type,
 			length,
-			required,
-			custom,
+			boolToYesNo(isRequired),
+			boolToYesNo(f.Custom),
 		})
 	}
 
