@@ -55,27 +55,22 @@ Examples:
 }
 
 func runImport(ctx context.Context, opts *root.Options, object, file, operation, externalID string, wait bool) error {
-	// Validate operation
 	op := bulk.Operation(strings.ToLower(operation))
 	switch op {
 	case bulk.OperationInsert, bulk.OperationUpdate, bulk.OperationUpsert, bulk.OperationDelete:
-		// Valid
 	default:
 		return fmt.Errorf("invalid operation: %s (must be insert, update, upsert, or delete)", operation)
 	}
 
-	// Upsert requires external ID
 	if op == bulk.OperationUpsert && externalID == "" {
 		return fmt.Errorf("--external-id is required for upsert operation")
 	}
 
-	// Read CSV file
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Create bulk client
 	client, err := opts.BulkClient()
 	if err != nil {
 		return fmt.Errorf("failed to create bulk client: %w", err)
@@ -83,7 +78,6 @@ func runImport(ctx context.Context, opts *root.Options, object, file, operation,
 
 	v := opts.View()
 
-	// Create job
 	v.Info("Creating bulk %s job for %s...", operation, object)
 	job, err := client.CreateJob(ctx, bulk.JobConfig{
 		Object:     object,
@@ -96,13 +90,11 @@ func runImport(ctx context.Context, opts *root.Options, object, file, operation,
 
 	v.Info("Job created: %s", job.ID)
 
-	// Upload data
 	v.Info("Uploading data...")
 	if err := client.UploadJobData(ctx, job.ID, data); err != nil {
 		return fmt.Errorf("failed to upload data: %w", err)
 	}
 
-	// Close job to start processing
 	v.Info("Starting job processing...")
 	job, err = client.CloseJob(ctx, job.ID)
 	if err != nil {
@@ -114,14 +106,12 @@ func runImport(ctx context.Context, opts *root.Options, object, file, operation,
 		return nil
 	}
 
-	// Poll until complete
 	v.Info("Waiting for job to complete...")
 	job, err = client.PollJob(ctx, job.ID, bulk.DefaultPollConfig())
 	if err != nil {
 		return fmt.Errorf("failed waiting for job: %w", err)
 	}
 
-	// Show results
 	return renderJobResult(opts, job)
 }
 

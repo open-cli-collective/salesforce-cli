@@ -83,14 +83,12 @@ func runShow(cmd *cobra.Command, args []string) error {
 	fmt.Println("============================")
 	fmt.Println()
 
-	// Instance URL
 	if cfg.InstanceURL != "" {
 		fmt.Printf("Instance URL:    %s\n", cfg.InstanceURL)
 	} else {
 		fmt.Println("Instance URL:    Not configured")
 	}
 
-	// Client ID (show partial for security)
 	if cfg.ClientID != "" {
 		masked := maskClientID(cfg.ClientID)
 		fmt.Printf("Client ID:       %s\n", masked)
@@ -98,7 +96,6 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("Client ID:       Not configured")
 	}
 
-	// Token status
 	fmt.Println()
 	if keychain.HasStoredToken() {
 		fmt.Printf("Token:           Found (stored in %s)\n", keychain.GetStorageBackend())
@@ -106,7 +103,6 @@ func runShow(cmd *cobra.Command, args []string) error {
 		fmt.Println("Token:           Not found")
 	}
 
-	// Config file location
 	fmt.Println()
 	configPath, err := config.GetConfigPath()
 	if err != nil {
@@ -130,14 +126,12 @@ func runTest(cmd *cobra.Command, args []string) error {
 	fmt.Println("Testing Salesforce connection...")
 	fmt.Println()
 
-	// Check token exists
 	if !keychain.HasStoredToken() {
 		fmt.Println("  Token:       NOT FOUND")
 		return fmt.Errorf("no OAuth token found - please run 'sfdc init' first")
 	}
 	fmt.Println("  Token:       Found")
 
-	// Get authenticated client
 	ctx := context.Background()
 	client, err := auth.GetHTTPClient(ctx)
 	if err != nil {
@@ -146,7 +140,6 @@ func runTest(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("  OAuth:       OK")
 
-	// Test API access
 	normalizedURL := normalizeURL(cfg.InstanceURL)
 	resp, err := client.Get(normalizedURL + "/services/data/")
 	if err != nil {
@@ -181,13 +174,11 @@ func runClear(force bool) error {
 	var hadToken, hadConfig bool
 	var tokenErr, configErr error
 
-	// Clear token from keychain
 	if keychain.HasStoredToken() {
 		hadToken = true
 		tokenErr = keychain.DeleteToken()
 	}
 
-	// Clear config file
 	cfg, _ := config.Load()
 	if cfg.InstanceURL != "" || cfg.ClientID != "" {
 		hadConfig = true
@@ -196,7 +187,6 @@ func runClear(force bool) error {
 		configErr = config.Save(cfg)
 	}
 
-	// Report results
 	if tokenErr != nil {
 		fmt.Printf("Warning: failed to remove token: %v\n", tokenErr)
 	} else if hadToken {

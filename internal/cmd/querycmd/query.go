@@ -56,13 +56,10 @@ func runQuery(ctx context.Context, opts *root.Options, soql string, all, noLimit
 	var result *api.QueryResult
 
 	if all {
-		// Use queryAll to include deleted/archived records
 		result, err = queryAllRecords(ctx, client, soql)
 	} else if noLimit {
-		// Fetch all pages
 		result, err = client.QueryAll(ctx, soql)
 	} else {
-		// Single page query
 		result, err = client.Query(ctx, soql)
 	}
 
@@ -73,13 +70,10 @@ func runQuery(ctx context.Context, opts *root.Options, soql string, all, noLimit
 	return renderQueryResult(opts, result)
 }
 
-// queryAllRecords uses the queryAll endpoint to include deleted/archived records
+// queryAllRecords uses the /queryAll endpoint to include deleted/archived records.
 func queryAllRecords(ctx context.Context, client *api.Client, soql string) (*api.QueryResult, error) {
-	// The queryAll endpoint is at /queryAll instead of /query
-	// We need to make a direct request since the client doesn't have this method
 	path := fmt.Sprintf("/queryAll?q=%s", url.QueryEscape(soql))
 
-	// Use the client's Get method with URL encoding handled
 	body, err := client.Get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -101,21 +95,17 @@ func renderQueryResult(opts *root.Options, result *api.QueryResult) error {
 		return nil
 	}
 
-	// For JSON output, render the full result
 	if opts.Output == "json" {
 		return v.JSON(result)
 	}
 
-	// For table/plain output, extract field names from first record
 	headers := extractHeaders(result.Records)
 	rows := extractRows(result.Records, headers)
 
-	// Add record count footer
 	if err := v.Table(headers, rows); err != nil {
 		return err
 	}
 
-	// Show pagination info if not all records fetched
 	if !result.Done {
 		v.Info("\nShowing %d of %d records (use --no-limit to fetch all)", len(result.Records), result.TotalSize)
 	} else {
@@ -133,7 +123,6 @@ func extractHeaders(records []api.SObject) []string {
 
 	headers := []string{"Id"}
 
-	// Get field names from first record and sort for consistency
 	first := records[0]
 	fieldNames := make([]string, 0, len(first.Fields))
 	for name := range first.Fields {
@@ -175,7 +164,6 @@ func formatFieldValue(v interface{}) string {
 	case string:
 		return val
 	case float64:
-		// Check if it's a whole number
 		if val == float64(int64(val)) {
 			return fmt.Sprintf("%.0f", val)
 		}
@@ -186,7 +174,6 @@ func formatFieldValue(v interface{}) string {
 		}
 		return "false"
 	case map[string]interface{}:
-		// Nested object (e.g., relationship)
 		if name, ok := val["Name"].(string); ok {
 			return name
 		}
