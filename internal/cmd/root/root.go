@@ -11,6 +11,7 @@ import (
 
 	"github.com/open-cli-collective/salesforce-cli/api"
 	"github.com/open-cli-collective/salesforce-cli/api/bulk"
+	"github.com/open-cli-collective/salesforce-cli/api/metadata"
 	"github.com/open-cli-collective/salesforce-cli/api/tooling"
 	"github.com/open-cli-collective/salesforce-cli/internal/auth"
 	"github.com/open-cli-collective/salesforce-cli/internal/config"
@@ -34,6 +35,8 @@ type Options struct {
 	testBulkClient *bulk.Client
 	// testToolingClient is used for testing; if set, ToolingClient() returns this instead
 	testToolingClient *tooling.Client
+	// testMetadataClient is used for testing; if set, MetadataClient() returns this instead
+	testMetadataClient *metadata.Client
 }
 
 // View returns a configured View instance
@@ -126,6 +129,29 @@ func (o *Options) ToolingClient() (*tooling.Client, error) {
 // SetToolingClient sets a test tooling client (for testing only)
 func (o *Options) SetToolingClient(client *tooling.Client) {
 	o.testToolingClient = client
+}
+
+// MetadataClient creates a new Metadata API client from config
+func (o *Options) MetadataClient() (*metadata.Client, error) {
+	if o.testMetadataClient != nil {
+		return o.testMetadataClient, nil
+	}
+
+	instanceURL, httpClient, err := o.loadClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata.New(metadata.ClientConfig{
+		InstanceURL: instanceURL,
+		HTTPClient:  httpClient,
+		APIVersion:  o.APIVersion,
+	})
+}
+
+// SetMetadataClient sets a test metadata client (for testing only)
+func (o *Options) SetMetadataClient(client *metadata.Client) {
+	o.testMetadataClient = client
 }
 
 // NewCmd creates the root command and returns the options struct
