@@ -239,3 +239,46 @@ type LimitInfo struct {
 	Max       int `json:"Max"`
 	Remaining int `json:"Remaining"`
 }
+
+// SearchResult represents the result of a SOSL search
+type SearchResult struct {
+	SearchRecords []SearchRecord `json:"searchRecords"`
+}
+
+// SearchRecord represents a single search result record
+type SearchRecord struct {
+	Attributes SObjectAttributes      `json:"attributes"`
+	ID         string                 `json:"Id"`
+	Fields     map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON custom unmarshaler for SearchRecord to capture all fields
+func (s *SearchRecord) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	s.Fields = make(map[string]interface{})
+
+	for key, value := range raw {
+		switch key {
+		case "attributes":
+			if err := json.Unmarshal(value, &s.Attributes); err != nil {
+				return err
+			}
+		case "Id":
+			if err := json.Unmarshal(value, &s.ID); err != nil {
+				return err
+			}
+		default:
+			var v interface{}
+			if err := json.Unmarshal(value, &v); err != nil {
+				return err
+			}
+			s.Fields[key] = v
+		}
+	}
+
+	return nil
+}
