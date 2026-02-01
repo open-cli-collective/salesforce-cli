@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,8 +38,8 @@ func runDelete(ctx context.Context, opts *root.Options, objectName, recordID str
 
 	// Prompt for confirmation if not confirmed
 	if !confirm {
-		fmt.Printf("Delete %s record %s? [y/N]: ", objectName, recordID)
-		reader := bufio.NewReader(os.Stdin)
+		v.Print("Delete %s record %s? [y/N]: ", objectName, recordID)
+		reader := bufio.NewReader(opts.Stdin)
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read input: %w", err)

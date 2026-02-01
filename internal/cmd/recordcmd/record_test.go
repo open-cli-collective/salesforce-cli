@@ -198,6 +198,69 @@ func TestUpdateCommand(t *testing.T) {
 	assert.Contains(t, output, "Updated")
 }
 
+func TestDeleteCommand_PromptYes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := api.New(api.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdin := bytes.NewBufferString("y\n")
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetAPIClient(client)
+
+	cmd := newDeleteCommand(opts)
+	cmd.SetArgs([]string{"Account", "001xx000001"})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	output := stdout.String()
+	assert.Contains(t, output, "Deleted")
+}
+
+func TestDeleteCommand_PromptNo(t *testing.T) {
+	// No server needed - should not make API call
+	client, err := api.New(api.ClientConfig{
+		InstanceURL: "https://test.salesforce.com",
+		HTTPClient:  &http.Client{},
+	})
+	require.NoError(t, err)
+
+	stdin := bytes.NewBufferString("n\n")
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetAPIClient(client)
+
+	cmd := newDeleteCommand(opts)
+	cmd.SetArgs([]string{"Account", "001xx000001"})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	output := stdout.String()
+	assert.Contains(t, output, "Cancelled")
+}
+
 func TestDeleteCommand_WithConfirm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodDelete, r.Method)
