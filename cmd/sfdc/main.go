@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/bulkcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/completion"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/configcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/initcmd"
@@ -44,6 +45,9 @@ func run() error {
 	searchcmd.Register(rootCmd, opts)
 	objectcmd.Register(rootCmd, opts)
 	limitscmd.Register(rootCmd, opts)
+
+	// Bulk API commands
+	bulkcmd.Register(rootCmd, opts)
 
 	return rootCmd.Execute()
 }

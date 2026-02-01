@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/salesforce-cli/api"
+	"github.com/open-cli-collective/salesforce-cli/api/bulk"
 	"github.com/open-cli-collective/salesforce-cli/internal/auth"
 	"github.com/open-cli-collective/salesforce-cli/internal/config"
 	"github.com/open-cli-collective/salesforce-cli/internal/version"
@@ -27,6 +28,8 @@ type Options struct {
 
 	// testClient is used for testing; if set, APIClient() returns this instead
 	testClient *api.Client
+	// testBulkClient is used for testing; if set, BulkClient() returns this instead
+	testBulkClient *bulk.Client
 }
 
 // View returns a configured View instance
@@ -63,6 +66,34 @@ func (o *Options) APIClient() (*api.Client, error) {
 // SetAPIClient sets a test client (for testing only)
 func (o *Options) SetAPIClient(client *api.Client) {
 	o.testClient = client
+}
+
+// BulkClient creates a new Bulk API client from config
+func (o *Options) BulkClient() (*bulk.Client, error) {
+	if o.testBulkClient != nil {
+		return o.testBulkClient, nil
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient, err := auth.GetHTTPClient(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return bulk.New(bulk.ClientConfig{
+		InstanceURL: cfg.InstanceURL,
+		HTTPClient:  httpClient,
+		APIVersion:  o.APIVersion,
+	})
+}
+
+// SetBulkClient sets a test bulk client (for testing only)
+func (o *Options) SetBulkClient(client *bulk.Client) {
+	o.testBulkClient = client
 }
 
 // NewCmd creates the root command and returns the options struct
