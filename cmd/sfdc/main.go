@@ -13,6 +13,7 @@ import (
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/initcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/limitscmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/logcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/metadatacmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/objectcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/querycmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/recordcmd"
@@ -56,6 +57,9 @@ func run() error {
 	apexcmd.Register(rootCmd, opts)
 	logcmd.Register(rootCmd, opts)
 	coveragecmd.Register(rootCmd, opts)
+
+	// Metadata API commands
+	metadatacmd.Register(rootCmd, opts)
 
 	return rootCmd.Execute()
 }
