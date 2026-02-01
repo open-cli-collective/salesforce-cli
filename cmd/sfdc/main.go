@@ -8,7 +8,12 @@ import (
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/completion"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/configcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/initcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/limitscmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/objectcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/querycmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/recordcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/root"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/searchcmd"
 )
 
 // Exit codes
@@ -32,6 +37,13 @@ func run() error {
 	initcmd.Register(rootCmd, opts)
 	configcmd.Register(rootCmd, opts)
 	completion.Register(rootCmd, opts)
+
+	// REST API commands
+	querycmd.Register(rootCmd, opts)
+	recordcmd.Register(rootCmd, opts)
+	searchcmd.Register(rootCmd, opts)
+	objectcmd.Register(rootCmd, opts)
+	limitscmd.Register(rootCmd, opts)
 
 	return rootCmd.Execute()
 }

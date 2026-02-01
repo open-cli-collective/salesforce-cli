@@ -336,3 +336,19 @@ func (c *Client) DeleteRecord(ctx context.Context, objectName, recordID string) 
 func (c *Client) RecordURL(recordID string) string {
 	return fmt.Sprintf("%s/%s", c.InstanceURL, recordID)
 }
+
+// Search executes a SOSL search and returns the results
+func (c *Client) Search(ctx context.Context, sosl string) (*SearchResult, error) {
+	path := fmt.Sprintf("/search?q=%s", url.QueryEscape(sosl))
+	body, err := c.Get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	var result SearchResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse search result: %w", err)
+	}
+
+	return &result, nil
+}
