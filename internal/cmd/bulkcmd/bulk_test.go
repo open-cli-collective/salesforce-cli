@@ -351,3 +351,218 @@ func TestJobErrorsCommand(t *testing.T) {
 	output := stdout.String()
 	assert.Contains(t, output, "REQUIRED_FIELD_MISSING")
 }
+
+func TestImportCommand_InvalidOperation(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+
+	tmpDir := t.TempDir()
+	csvFile := filepath.Join(tmpDir, "test.csv")
+	err := os.WriteFile(csvFile, []byte("Name\nTest"), 0644)
+	require.NoError(t, err)
+
+	cmd := newImportCommand(opts)
+	cmd.SetArgs([]string{"Account", "--file", csvFile, "--operation", "invalid"})
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+
+	err = cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid operation")
+}
+
+func TestImportCommand_FileNotFound(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+
+	cmd := newImportCommand(opts)
+	cmd.SetArgs([]string{"Account", "--file", "/nonexistent/file.csv", "--operation", "insert"})
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read file")
+}
+
+func TestJobListCommand_Empty(t *testing.T) {
+	expected := bulk.JobsResponse{
+		Done:    true,
+		Records: []bulk.JobInfo{},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expected)
+	}))
+	defer server.Close()
+
+	client, err := bulk.New(bulk.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetBulkClient(client)
+
+	cmd := newJobListCommand(opts)
+	cmd.SetArgs([]string{})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	output := stdout.String()
+	assert.Contains(t, output, "No bulk jobs found")
+}
+
+func TestJobListCommand_JSONOutput(t *testing.T) {
+	expected := bulk.JobsResponse{
+		Done: true,
+		Records: []bulk.JobInfo{
+			{ID: "750xx000000001", Object: "Account", Operation: bulk.OperationInsert, State: bulk.StateJobComplete},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expected)
+	}))
+	defer server.Close()
+
+	client, err := bulk.New(bulk.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "json",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetBulkClient(client)
+
+	cmd := newJobListCommand(opts)
+	cmd.SetArgs([]string{})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	var result bulk.JobsResponse
+	err = json.Unmarshal(stdout.Bytes(), &result)
+	require.NoError(t, err)
+	assert.Len(t, result.Records, 1)
+}
+
+func TestExportCommand_ToFile(t *testing.T) {
+	csvData := "Id,Name\n001xx000001,Acme"
+	expectedJob := bulk.QueryJobInfo{
+		ID:                     "750xx000000001",
+		Operation:              bulk.OperationQuery,
+		State:                  bulk.StateJobComplete,
+		NumberRecordsProcessed: 1,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(expectedJob)
+		case r.URL.Path == "/services/data/v62.0/jobs/query/750xx000000001":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(expectedJob)
+		case r.URL.Path == "/services/data/v62.0/jobs/query/750xx000000001/results":
+			w.Header().Set("Content-Type", "text/csv")
+			_, _ = w.Write([]byte(csvData))
+		}
+	}))
+	defer server.Close()
+
+	client, err := bulk.New(bulk.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "output.csv")
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetBulkClient(client)
+
+	cmd := newExportCommand(opts)
+	cmd.SetArgs([]string{"SELECT Id, Name FROM Account", "--output", outputFile})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	// Check file was written
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "Acme")
+}
+
+func TestJobResultsCommand_ToFile(t *testing.T) {
+	csvData := "sf__Id,sf__Created,Name\n001xx000001,true,Acme"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte(csvData))
+	}))
+	defer server.Close()
+
+	client, err := bulk.New(bulk.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "results.csv")
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetBulkClient(client)
+
+	cmd := newJobResultsCommand(opts)
+	cmd.SetArgs([]string{"750xx000000001", "--output", outputFile})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	// Check file was written
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "Acme")
+	assert.Contains(t, stdout.String(), "Results written to")
+}

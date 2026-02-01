@@ -323,3 +323,181 @@ func TestAbortJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StateAborted, job.State)
 }
+
+func TestDeleteJob(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method)
+		assert.Contains(t, r.URL.Path, "/jobs/ingest/750xx000000001")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	err = client.DeleteJob(context.Background(), "750xx000000001")
+	require.NoError(t, err)
+}
+
+func TestGetUnprocessedRecords(t *testing.T) {
+	csvData := "Name,Industry\nUnprocessed,Tech"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Contains(t, r.URL.Path, "/unprocessedrecords")
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte(csvData))
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	data, err := client.GetUnprocessedRecords(context.Background(), "750xx000000001")
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "Unprocessed")
+}
+
+func TestGetQueryJob(t *testing.T) {
+	expectedJob := QueryJobInfo{
+		ID:                     "750xx000000001",
+		Operation:              OperationQuery,
+		State:                  StateJobComplete,
+		NumberRecordsProcessed: 50,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Contains(t, r.URL.Path, "/jobs/query/750xx000000001")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expectedJob)
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	job, err := client.GetQueryJob(context.Background(), "750xx000000001")
+	require.NoError(t, err)
+	assert.Equal(t, StateJobComplete, job.State)
+	assert.Equal(t, 50, job.NumberRecordsProcessed)
+}
+
+func TestAbortQueryJob(t *testing.T) {
+	expectedJob := QueryJobInfo{
+		ID:    "750xx000000001",
+		State: StateAborted,
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPatch, r.Method)
+		assert.Contains(t, r.URL.Path, "/jobs/query/750xx000000001")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expectedJob)
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	job, err := client.AbortQueryJob(context.Background(), "750xx000000001")
+	require.NoError(t, err)
+	assert.Equal(t, StateAborted, job.State)
+}
+
+func TestDeleteQueryJob(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method)
+		assert.Contains(t, r.URL.Path, "/jobs/query/750xx000000001")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	err = client.DeleteQueryJob(context.Background(), "750xx000000001")
+	require.NoError(t, err)
+}
+
+func TestListQueryJobs(t *testing.T) {
+	expected := QueryJobsResponse{
+		Done: true,
+		Records: []QueryJobInfo{
+			{ID: "750xx000000001", State: StateJobComplete},
+			{ID: "750xx000000002", State: StateInProgress},
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Contains(t, r.URL.Path, "/jobs/query")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expected)
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	resp, err := client.ListQueryJobs(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, resp.Records, 2)
+}
+
+func TestAPIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errorCode":"INVALID_FIELD","message":"Invalid field"}`))
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	_, err = client.GetJob(context.Background(), "invalid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "400")
+}
+
+func TestContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Slow response
+		select {}
+	}))
+	defer server.Close()
+
+	client, err := New(ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	_, err = client.GetJob(ctx, "750xx000000001")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
