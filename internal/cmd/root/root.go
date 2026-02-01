@@ -11,6 +11,7 @@ import (
 
 	"github.com/open-cli-collective/salesforce-cli/api"
 	"github.com/open-cli-collective/salesforce-cli/api/bulk"
+	"github.com/open-cli-collective/salesforce-cli/api/tooling"
 	"github.com/open-cli-collective/salesforce-cli/internal/auth"
 	"github.com/open-cli-collective/salesforce-cli/internal/config"
 	"github.com/open-cli-collective/salesforce-cli/internal/version"
@@ -31,6 +32,8 @@ type Options struct {
 	testClient *api.Client
 	// testBulkClient is used for testing; if set, BulkClient() returns this instead
 	testBulkClient *bulk.Client
+	// testToolingClient is used for testing; if set, ToolingClient() returns this instead
+	testToolingClient *tooling.Client
 }
 
 // View returns a configured View instance
@@ -100,6 +103,29 @@ func (o *Options) BulkClient() (*bulk.Client, error) {
 // SetBulkClient sets a test bulk client (for testing only)
 func (o *Options) SetBulkClient(client *bulk.Client) {
 	o.testBulkClient = client
+}
+
+// ToolingClient creates a new Tooling API client from config
+func (o *Options) ToolingClient() (*tooling.Client, error) {
+	if o.testToolingClient != nil {
+		return o.testToolingClient, nil
+	}
+
+	instanceURL, httpClient, err := o.loadClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return tooling.New(tooling.ClientConfig{
+		InstanceURL: instanceURL,
+		HTTPClient:  httpClient,
+		APIVersion:  o.APIVersion,
+	})
+}
+
+// SetToolingClient sets a test tooling client (for testing only)
+func (o *Options) SetToolingClient(client *tooling.Client) {
+	o.testToolingClient = client
 }
 
 // NewCmd creates the root command and returns the options struct

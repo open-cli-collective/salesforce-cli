@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/apexcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/bulkcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/completion"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/configcmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/coveragecmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/initcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/limitscmd"
+	"github.com/open-cli-collective/salesforce-cli/internal/cmd/logcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/objectcmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/querycmd"
 	"github.com/open-cli-collective/salesforce-cli/internal/cmd/recordcmd"
@@ -48,6 +51,11 @@ func run() error {
 
 	// Bulk API commands
 	bulkcmd.Register(rootCmd, opts)
+
+	// Tooling API commands
+	apexcmd.Register(rootCmd, opts)
+	logcmd.Register(rootCmd, opts)
+	coveragecmd.Register(rootCmd, opts)
 
 	return rootCmd.Execute()
 }
