@@ -2,11 +2,13 @@ package logcmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -252,6 +254,51 @@ func TestLogListEmpty(t *testing.T) {
 
 	output := stdout.String()
 	assert.Contains(t, output, "No debug logs found")
+}
+
+func TestLogTailContextCancellation(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		response := tooling.QueryResult{
+			TotalSize: 0,
+			Done:      true,
+			Records:   []tooling.Record{},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client, err := tooling.New(tooling.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetToolingClient(client)
+
+	cmd := NewCommand(opts)
+	cmd.SetArgs([]string{"tail", "--interval", "1"})
+	cmd.SetOut(stdout)
+
+	// Create a context that will be cancelled quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	err = cmd.ExecuteContext(ctx)
+	require.NoError(t, err)
+
+	output := stdout.String()
+	assert.Contains(t, output, "Tailing debug logs")
+	// Should have made at least one API call
+	assert.GreaterOrEqual(t, callCount, 1)
 }
 
 func TestFormatSize(t *testing.T) {

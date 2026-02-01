@@ -327,6 +327,94 @@ func TestApexTestNoWait(t *testing.T) {
 	assert.Contains(t, output, "Tests enqueued")
 }
 
+func TestApexGetTrigger(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Contains(t, r.URL.RawQuery, "ApexTrigger")
+
+		response := tooling.QueryResult{
+			TotalSize: 1,
+			Done:      true,
+			Records: []tooling.Record{
+				{
+					"Id":            "01q000000000001",
+					"Name":          "AccountTrigger",
+					"Body":          "trigger AccountTrigger on Account (before insert) { }",
+					"Status":        "Active",
+					"IsValid":       true,
+					"ApiVersion":    float64(62),
+					"TableEnumOrId": "Account",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client, err := tooling.New(tooling.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdout := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "plain",
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+	}
+	opts.SetToolingClient(client)
+
+	cmd := NewCommand(opts)
+	cmd.SetArgs([]string{"get", "AccountTrigger", "--trigger"})
+	cmd.SetOut(stdout)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	output := stdout.String()
+	assert.Contains(t, output, "trigger AccountTrigger on Account")
+}
+
+func TestApexExecuteRuntimeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := tooling.ExecuteAnonymousResult{
+			Compiled:            true,
+			Success:             false,
+			ExceptionMessage:    "System.NullPointerException: Attempt to de-reference a null object",
+			ExceptionStackTrace: "AnonymousBlock: line 1, column 1",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client, err := tooling.New(tooling.ClientConfig{
+		InstanceURL: server.URL,
+		HTTPClient:  server.Client(),
+	})
+	require.NoError(t, err)
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts := &root.Options{
+		Output: "table",
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+	opts.SetToolingClient(client)
+
+	cmd := NewCommand(opts)
+	cmd.SetArgs([]string{"execute", "String s; s.length();"})
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+
+	err = cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "execution failed")
+	assert.Contains(t, stderr.String(), "NullPointerException")
+}
+
 func TestApexListJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := tooling.QueryResult{
