@@ -31,24 +31,29 @@ func TestMaskClientID(t *testing.T) {
 		expected string
 	}{
 		{
+			name:     "empty client ID",
+			input:    "",
+			expected: "",
+		},
+		{
 			name:     "long client ID",
 			input:    "3MVG9nKNqSNYF2dG9y7eJzIxOtLw.abc123xyz",
-			expected: "3MVG...3xyz",
+			expected: "3MVG********3xyz",
 		},
 		{
 			name:     "short client ID",
 			input:    "short123",
-			expected: "****",
+			expected: "********",
 		},
 		{
-			name:     "exactly 12 chars",
-			input:    "123456789012",
-			expected: "****",
+			name:     "exactly 8 chars",
+			input:    "12345678",
+			expected: "********",
 		},
 		{
-			name:     "13 chars",
-			input:    "1234567890123",
-			expected: "1234...0123",
+			name:     "9 chars",
+			input:    "123456789",
+			expected: "1234********6789",
 		},
 	}
 

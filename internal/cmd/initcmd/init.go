@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/salesforce-cli/internal/auth"
@@ -81,11 +82,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 			fmt.Println()
 			fmt.Println("Your OAuth token appears to be expired or revoked.")
-			fmt.Print("Would you like to re-authenticate? [Y/n]: ")
 
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "" && input != "y" && input != "yes" {
+			var reauth bool
+			err := huh.NewConfirm().
+				Title("Would you like to re-authenticate?").
+				Value(&reauth).
+				Run()
+			if err != nil {
+				return err
+			}
+			if !reauth {
 				fmt.Println("You can manually clear the token with: sfdc config clear")
 				return nil
 			}
@@ -101,52 +107,61 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	if instanceURL == "" {
-		instanceURL = cfg.InstanceURL
-	}
-	if instanceURL == "" {
-		fmt.Println("Salesforce Instance URL")
-		fmt.Println("Enter your Salesforce login URL, or leave blank for production.")
-		fmt.Println()
-		fmt.Println("  Production: login.salesforce.com (default)")
-		fmt.Println("  Sandbox:    test.salesforce.com")
-		fmt.Println("  Custom:     mycompany.my.salesforce.com")
-		fmt.Println()
-		fmt.Print("Instance URL [login.salesforce.com]: ")
+	// Pre-fill from existing config, then override with CLI flags
+	// Priority: CLI flag > existing config value
+	formInstanceURL := ""
+	formClientID := ""
 
-		input, _ := reader.ReadString('\n')
-		instanceURL = strings.TrimSpace(input)
-		if instanceURL == "" {
-			instanceURL = "login.salesforce.com"
-		}
+	if instanceURL != "" {
+		formInstanceURL = instanceURL
+	} else if cfg.InstanceURL != "" {
+		formInstanceURL = cfg.InstanceURL
 	}
 
-	if clientID == "" {
-		clientID = cfg.ClientID
-	}
-	if clientID == "" {
-		fmt.Println()
-		fmt.Println("Connected App Client ID")
-		fmt.Println("Create at: Setup → App Manager → New Connected App")
-		fmt.Println("Required scopes: api, refresh_token, offline_access")
-		fmt.Println("Callback URL: http://localhost:8080/callback")
-		fmt.Println()
-		fmt.Print("Client ID: ")
-
-		input, _ := reader.ReadString('\n')
-		clientID = strings.TrimSpace(input)
-		if clientID == "" {
-			return fmt.Errorf("client ID is required")
-		}
+	if clientID != "" {
+		formClientID = clientID
+	} else if cfg.ClientID != "" {
+		formClientID = cfg.ClientID
 	}
 
-	cfg.InstanceURL = instanceURL
-	cfg.ClientID = clientID
+	// Build the form for configuration inputs
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Instance URL").
+				Description("Production: login.salesforce.com | Sandbox: test.salesforce.com").
+				Placeholder("login.salesforce.com").
+				Value(&formInstanceURL),
+
+			huh.NewInput().
+				Title("Client ID").
+				Description("Connected App Consumer Key from Setup → App Manager").
+				Value(&formClientID).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("client ID is required")
+					}
+					return nil
+				}),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return err
+	}
+
+	// Apply defaults
+	if formInstanceURL == "" {
+		formInstanceURL = "login.salesforce.com"
+	}
+
+	cfg.InstanceURL = formInstanceURL
+	cfg.ClientID = formClientID
 	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	oauthConfig := auth.GetOAuthConfig(instanceURL, clientID)
+	oauthConfig := auth.GetOAuthConfig(formInstanceURL, formClientID)
 	authURL := auth.GetAuthURL(oauthConfig)
 
 	fmt.Println()
@@ -227,7 +242,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	if !noVerify {
 		fmt.Println()
-		if err := verifyConnectivity(instanceURL); err != nil {
+		if err := verifyConnectivity(formInstanceURL); err != nil {
 			return err
 		}
 	}

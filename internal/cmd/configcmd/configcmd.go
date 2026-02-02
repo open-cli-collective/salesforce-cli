@@ -211,10 +211,13 @@ func runClear(force bool) error {
 
 // maskClientID masks a client ID for display, showing only first and last 4 chars.
 func maskClientID(clientID string) string {
-	if len(clientID) <= 12 {
-		return "****"
+	if clientID == "" {
+		return ""
 	}
-	return clientID[:4] + "..." + clientID[len(clientID)-4:]
+	if len(clientID) <= 8 {
+		return "********"
+	}
+	return clientID[:4] + "********" + clientID[len(clientID)-4:]
 }
 
 // normalizeURL ensures the URL has https:// prefix.
