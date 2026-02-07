@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	// DefaultCallbackPort is the port for the OAuth callback server
-	DefaultCallbackPort = 8080
+	// CallbackURL is the OAuth redirect URL that must match the Connected App configuration.
+	// No server listens on this — the browser shows an error and the user copies the URL.
+	CallbackURL = "http://localhost:8080/callback"
 
 	// ProductionLoginURL is the Salesforce production login endpoint
 	ProductionLoginURL = "https://login.salesforce.com"
@@ -42,7 +43,7 @@ func GetOAuthConfig(instanceURL, clientID string) *oauth2.Config {
 			AuthURL:  instanceURL + "/services/oauth2/authorize",
 			TokenURL: instanceURL + "/services/oauth2/token",
 		},
-		RedirectURL: fmt.Sprintf("http://localhost:%d/callback", DefaultCallbackPort),
+		RedirectURL: CallbackURL,
 		Scopes:      Scopes,
 	}
 }

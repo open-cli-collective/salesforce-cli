@@ -42,6 +42,26 @@ func TestExtractAuthCode(t *testing.T) {
 			input: "  abc123  ",
 			want:  "abc123",
 		},
+		{
+			name:  "localhost URL without port",
+			input: "http://localhost/?code=abc123xyz",
+			want:  "abc123xyz",
+		},
+		{
+			name:  "https localhost URL",
+			input: "https://localhost/?code=SecureCode456",
+			want:  "SecureCode456",
+		},
+		{
+			name:  "code with special characters",
+			input: "http://localhost:8080/callback?code=4/P-abc_123.xyz~456",
+			want:  "4/P-abc_123.xyz~456",
+		},
+		{
+			name:  "URL encoded code",
+			input: "http://localhost:8080/callback?code=4%2F0AQSTgQ",
+			want:  "4/0AQSTgQ",
+		},
 	}
 
 	for _, tt := range tests {
@@ -63,5 +83,7 @@ func TestNewCommand(t *testing.T) {
 	assert.NotNil(t, cmd.Flags().Lookup("instance-url"))
 	assert.NotNil(t, cmd.Flags().Lookup("client-id"))
 	assert.NotNil(t, cmd.Flags().Lookup("no-verify"))
-	assert.NotNil(t, cmd.Flags().Lookup("no-browser"))
+
+	// --no-browser flag was removed (no more callback server or auto-browser-opening)
+	assert.Nil(t, cmd.Flags().Lookup("no-browser"))
 }

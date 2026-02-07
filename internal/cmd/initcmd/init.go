@@ -8,10 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -25,7 +22,6 @@ var (
 	instanceURL string
 	clientID    string
 	noVerify    bool
-	noBrowser   bool
 )
 
 // Register registers the init command with the parent command.
@@ -57,7 +53,6 @@ Prerequisites:
 	cmd.Flags().StringVar(&instanceURL, "instance-url", "", "Salesforce instance URL (e.g., login.salesforce.com)")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "Connected App Consumer Key")
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "Skip connectivity verification after setup")
-	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Don't auto-open browser, just print URL")
 
 	return cmd
 }
@@ -165,64 +160,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 	authURL := auth.GetAuthURL(oauthConfig)
 
 	fmt.Println()
-	if noBrowser {
-		fmt.Println("Open this URL in your browser:")
-	} else {
-		fmt.Println("Opening browser for Salesforce login...")
-		fmt.Println()
-		fmt.Println("If browser doesn't open, visit:")
-	}
+	fmt.Println("Open this URL in your browser:")
 	fmt.Println()
 	fmt.Println(authURL)
 	fmt.Println()
+	fmt.Println("After clicking 'Allow', your browser will redirect to a localhost URL.")
+	fmt.Println("This will show an error - that's expected!")
+	fmt.Println()
+	fmt.Println("Copy the ENTIRE URL from your browser's address bar and paste it here,")
+	fmt.Println("or just paste the 'code' parameter value:")
+	fmt.Println()
+	fmt.Print("> ")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	resultChan, err := auth.StartCallbackServer(ctx, auth.DefaultCallbackPort)
+	input, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Printf("Warning: Could not start callback server: %v\n", err)
-		fmt.Println("You'll need to manually copy the authorization code.")
+		return fmt.Errorf("failed to read input: %w", err)
 	}
 
-	if !noBrowser {
-		if err := openBrowser(authURL); err != nil {
-			fmt.Printf("Could not open browser: %v\n", err)
-		}
-	}
-
-	var code string
-	if resultChan != nil {
-		fmt.Println("Waiting for authorization...")
-		fmt.Println("(Or paste the authorization code or full redirect URL below)")
-		fmt.Println()
-
-		inputChan := make(chan string, 1)
-		go func() {
-			fmt.Print("> ")
-			input, _ := reader.ReadString('\n')
-			inputChan <- strings.TrimSpace(input)
-		}()
-
-		select {
-		case result := <-resultChan:
-			if result.Error != "" {
-				return fmt.Errorf("authorization failed: %s", result.Error)
-			}
-			code = result.Code
-			fmt.Println("Authorization received from callback.")
-		case input := <-inputChan:
-			code = extractAuthCode(input)
-		case <-ctx.Done():
-			return fmt.Errorf("authorization timed out")
-		}
-	} else {
-		fmt.Println("After authorizing, paste the authorization code or full redirect URL:")
-		fmt.Print("> ")
-		input, _ := reader.ReadString('\n')
-		code = extractAuthCode(strings.TrimSpace(input))
-	}
-
+	code := extractAuthCode(strings.TrimSpace(input))
 	if code == "" {
 		return fmt.Errorf("no authorization code received")
 	}
@@ -230,6 +185,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Exchanging authorization code for tokens...")
 
+	ctx := context.Background()
 	token, err := auth.ExchangeAuthCode(ctx, oauthConfig, code)
 	if err != nil {
 		return fmt.Errorf("failed to exchange authorization code: %w", err)
@@ -294,26 +250,4 @@ func verifyConnectivity(instanceURL string) error {
 	fmt.Println("  API access:  OK")
 
 	return nil
-}
-
-// openBrowser opens the default browser to the given URL.
-func openBrowser(url string) error {
-	var cmd string
-	var args []string
-
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	case "linux":
-		cmd = "xdg-open"
-		args = []string{url}
-	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
-	default:
-		return fmt.Errorf("unsupported platform")
-	}
-
-	return exec.Command(cmd, args...).Start()
 }
