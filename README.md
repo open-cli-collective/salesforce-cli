@@ -29,9 +29,38 @@ winget install OpenCLICollective.salesforce-cli
 sudo snap install ocli-sfdc
 ```
 
-### Linux (deb/rpm)
+### APT (Debian/Ubuntu)
 
-Download the appropriate package from the [releases page](https://github.com/open-cli-collective/salesforce-cli/releases).
+```bash
+# Add the GPG key
+curl -fsSL https://open-cli-collective.github.io/linux-packages/keys/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/open-cli-collective.gpg
+
+# Add the repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/open-cli-collective.gpg] https://open-cli-collective.github.io/linux-packages/apt stable main" | sudo tee /etc/apt/sources.list.d/open-cli-collective.list
+
+# Install
+sudo apt update && sudo apt install sfdc
+```
+
+### RPM (Fedora/RHEL)
+
+```bash
+# Import the GPG key
+sudo rpm --import https://open-cli-collective.github.io/linux-packages/keys/gpg.asc
+
+# Add the repository
+sudo tee /etc/yum.repos.d/open-cli-collective.repo << 'EOF'
+[open-cli-collective]
+name=Open CLI Collective
+baseurl=https://open-cli-collective.github.io/linux-packages/rpm/packages
+gpgcheck=1
+gpgkey=https://open-cli-collective.github.io/linux-packages/keys/gpg.asc
+enabled=1
+EOF
+
+# Install
+sudo dnf install sfdc
+```
 
 ### From Source
 
