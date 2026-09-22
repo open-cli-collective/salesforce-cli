@@ -59,17 +59,17 @@ nfpms:
 # Homebrew cask with auto-quarantine removal for unsigned binaries
 homebrew_casks:
   - name: salesforce-cli
+    skip_upload: true
     repository:
       owner: open-cli-collective
       name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/open-cli-collective/salesforce-cli
     description: "Command-line interface for Salesforce"
-    binary: sfdc
+    binaries: [sfdc]
     hooks:
       post:
         install: |
-          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sfdc"]
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "sfdc"], base: :staged_path
     caveats: |
       salesforce-cli has been installed.
 
