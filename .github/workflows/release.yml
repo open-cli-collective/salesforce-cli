@@ -18,7 +18,7 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,9 +60,11 @@ jobs:
     runs-on: windows-latest
     continue-on-error: true
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Get checksums from release
         shell: pwsh
@@ -131,7 +133,7 @@ jobs:
     runs-on: windows-latest
     continue-on-error: true
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
