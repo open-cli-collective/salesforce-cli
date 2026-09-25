@@ -30,6 +30,7 @@ If you need to publish manually:
 ```powershell
 cd packaging/chocolatey
 $version = '0.1.0'
+gh release download "v$version" --pattern checksums.txt --dir .
 $amd64Hash = (Get-Content checksums.txt | Select-String 'windows_amd64.zip').Line.Split()[0]
 $arm64Hash = (Get-Content checksums.txt | Select-String 'windows_arm64.zip').Line.Split()[0]
 pwsh ./render.ps1 -Version $version -Amd64Checksum $amd64Hash -Arm64Checksum $arm64Hash
@@ -43,6 +44,7 @@ choco push "salesforce-cli.$version.nupkg" --source https://push.chocolatey.org/
 ```powershell
 cd packaging/chocolatey
 $version = '0.1.0'
+gh release download "v$version" --pattern checksums.txt --dir .
 $amd64Hash = (Get-Content checksums.txt | Select-String 'windows_amd64.zip').Line.Split()[0]
 $arm64Hash = (Get-Content checksums.txt | Select-String 'windows_arm64.zip').Line.Split()[0]
 pwsh ./render.ps1 -Version $version -Amd64Checksum $amd64Hash -Arm64Checksum $arm64Hash
