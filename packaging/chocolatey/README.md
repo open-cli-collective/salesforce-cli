@@ -17,11 +17,11 @@ choco install salesforce-cli
 1. When a new version is released, the release workflow:
    - Downloads the Windows binaries
    - Extracts SHA256 checksums from `checksums.txt`
-   - Updates `chocolateyInstall.ps1` with the checksums
+   - Updates `chocolateyInstall.ps1` with literal AMD64/ARM64 release URLs and checksums
    - Updates the nuspec version
    - Packs and pushes to Chocolatey
 
-2. The checksums in `chocolateyInstall.ps1` are placeholders that get replaced during CI.
+2. The URLs and checksums in `chocolateyInstall.ps1` are placeholders that get replaced during CI.
 
 ## Manual Publishing
 
@@ -29,7 +29,7 @@ If you need to publish manually:
 
 ```powershell
 # Update version in nuspec
-# Update checksums in chocolateyInstall.ps1
+# Update release URLs and checksums in chocolateyInstall.ps1
 
 cd packaging/chocolatey
 choco pack
