@@ -3,11 +3,13 @@ name: Auto Release
 on:
   push:
     branches: [main]
-    # Gate 1: Only trigger when Go code actually changes
+    # Gate 1: Release code, version, and native packaging changes
     paths:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
+      - 'version.txt'
+      - '.goreleaser.yml'
 
 permissions:
   contents: write
