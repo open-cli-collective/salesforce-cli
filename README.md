@@ -68,6 +68,10 @@ sudo dnf install sfdc
 go install github.com/open-cli-collective/salesforce-cli/cmd/sfdc@latest
 ```
 
+### Arch Linux / Omarchy
+
+Add the signed [Open CLI Collective pacman repository](https://github.com/open-cli-collective/linux-packages#arch-linux-pacman) once. Native Arch packages are published with new releases and updated by `sudo pacman -Syu`. Install with `sudo pacman -Syu sfdc`; executable names remain unchanged.
+
 ## Quick Start
 
 ```bash
