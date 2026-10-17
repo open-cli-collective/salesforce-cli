@@ -18,7 +18,7 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,11 +58,12 @@ jobs:
   chocolatey:
     needs: goreleaser
     runs-on: windows-latest
-    continue-on-error: true
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Get checksums from release
         shell: pwsh
@@ -81,23 +82,14 @@ jobs:
           echo "X64_HASH=$x64Hash" >> $env:GITHUB_ENV
           echo "ARM64_HASH=$arm64Hash" >> $env:GITHUB_ENV
 
-      - name: Update version and checksums
+      - name: Render package
         shell: pwsh
         run: |
-          $version = "${{ env.TAG }}".TrimStart('v')
-
-          # Update version in nuspec
-          $nuspec = 'packaging/chocolatey/salesforce-cli.nuspec'
-          (Get-Content $nuspec) -replace '<version>0.0.0</version>', "<version>$version</version>" | Set-Content $nuspec
-          Write-Host "Updated nuspec to version $version"
-
-          # Inject checksums into install script
-          $script = 'packaging/chocolatey/tools/chocolateyInstall.ps1'
-          $content = Get-Content $script -Raw
-          $content = $content -replace 'CHECKSUM_AMD64_PLACEHOLDER', $env:X64_HASH
-          $content = $content -replace 'CHECKSUM_ARM64_PLACEHOLDER', $env:ARM64_HASH
-          Set-Content $script $content
-          Write-Host "Injected checksums into install script"
+          $version = $env:TAG.TrimStart('v')
+          & packaging/chocolatey/render.ps1 `
+            -Version $version `
+            -Amd64Checksum $env:X64_HASH `
+            -Arm64Checksum $env:ARM64_HASH
 
       - name: Pack Chocolatey package
         shell: pwsh
@@ -117,7 +109,7 @@ jobs:
     runs-on: windows-latest
     continue-on-error: true
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 

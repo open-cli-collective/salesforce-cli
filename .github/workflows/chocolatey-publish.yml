@@ -11,27 +11,35 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: v${{ inputs.version }}
 
       - name: Validate release exists
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $release = gh release view "v${{ inputs.version }}" --repo ${{ github.repository }} --json tagName 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Release v${{ inputs.version }} not found"
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "Version must be numeric SemVer (for example, 0.1.0)"
             exit 1
           }
-          Write-Host "Found release v${{ inputs.version }}"
+          $release = gh release view "v$env:VERSION" --repo ${{ github.repository }} --json tagName 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Release v$env:VERSION not found"
+            exit 1
+          }
+          Write-Host "Found release v$env:VERSION"
 
       - name: Get checksums from release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "v${{ inputs.version }}" --repo ${{ github.repository }} --pattern "checksums.txt" --dir .
+          gh release download "v$env:VERSION" --repo ${{ github.repository }} --pattern "checksums.txt" --dir .
 
           $checksums = Get-Content checksums.txt
           $x64Hash = ($checksums | Select-String "windows_amd64.zip").Line.Split()[0]
@@ -43,23 +51,13 @@ jobs:
           echo "X64_HASH=$x64Hash" >> $env:GITHUB_ENV
           echo "ARM64_HASH=$arm64Hash" >> $env:GITHUB_ENV
 
-      - name: Update version and checksums
+      - name: Render package
         shell: pwsh
         run: |
-          $version = "${{ inputs.version }}"
-
-          # Update version in nuspec
-          $nuspec = 'packaging/chocolatey/salesforce-cli.nuspec'
-          (Get-Content $nuspec) -replace '<version>0.0.0</version>', "<version>$version</version>" | Set-Content $nuspec
-          Write-Host "Updated nuspec to version $version"
-
-          # Inject checksums into install script
-          $script = 'packaging/chocolatey/tools/chocolateyInstall.ps1'
-          $content = Get-Content $script -Raw
-          $content = $content -replace 'CHECKSUM_AMD64_PLACEHOLDER', $env:X64_HASH
-          $content = $content -replace 'CHECKSUM_ARM64_PLACEHOLDER', $env:ARM64_HASH
-          Set-Content $script $content
-          Write-Host "Injected checksums into install script"
+          & packaging/chocolatey/render.ps1 `
+            -Version $env:VERSION `
+            -Amd64Checksum $env:X64_HASH `
+            -Arm64Checksum $env:ARM64_HASH
 
       - name: Pack Chocolatey package
         shell: pwsh
