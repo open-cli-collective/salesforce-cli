@@ -72,7 +72,7 @@ func buildSOSL(query, inObjects, returning string) string {
 
 	// Build SOSL from simplified parameters
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("FIND {%s}", query))
+	fmt.Fprintf(&sb, "FIND {%s}", query)
 
 	// Add IN clause if specified
 	if inObjects != "" {
@@ -81,14 +81,14 @@ func buildSOSL(query, inObjects, returning string) string {
 
 	// Add RETURNING clause
 	if returning != "" {
-		sb.WriteString(fmt.Sprintf(" RETURNING %s", returning))
+		fmt.Fprintf(&sb, " RETURNING %s", returning)
 	} else if inObjects != "" {
 		// Build RETURNING from --in objects
 		objects := strings.Split(inObjects, ",")
 		for i := range objects {
 			objects[i] = strings.TrimSpace(objects[i])
 		}
-		sb.WriteString(fmt.Sprintf(" RETURNING %s", strings.Join(objects, ",")))
+		fmt.Fprintf(&sb, " RETURNING %s", strings.Join(objects, ","))
 	}
 
 	return sb.String()
