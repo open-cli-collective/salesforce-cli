@@ -71,8 +71,8 @@ homebrew_casks:
     binaries: [sfdc]
     hooks:
       post:
-        install: |
-          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "sfdc"], base: :staged_path
+        install_steps: |
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/sfdc"]
     caveats: |
       salesforce-cli has been installed.
 
