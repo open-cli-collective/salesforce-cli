@@ -2,7 +2,7 @@ module github.com/open-cli-collective/salesforce-cli
 
 go 1.24.0
 
-toolchain go1.26.10
+toolchain go1.27.4
 
 require (
 	github.com/charmbracelet/huh v0.8.0
